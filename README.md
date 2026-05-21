@@ -135,7 +135,10 @@ MusicShop/
 Этот способ не требует установки .NET SDK и PostgreSQL на хост-машине — всё работает в изолированных контейнерах.
 
 ### Шаг 1: Клонирование репозитория
-
-```bash
+https://github.com/M1haL1T/MusicShop.git
 git clone https://github.com/your-username/MusicShop.git
 cd MusicShop
+### Шаг 2: Запуск контейнеров
+docker-compose up -d
+### Шаг 3: Открыть приложение
+http://localhost:8021
