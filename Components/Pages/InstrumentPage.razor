@@ -1,0 +1,150 @@
+@page "/catalog/{ItemId:int}"
+@rendermode InteractiveServer
+@inject IInstrumentService InstrumentService
+@inject IBasketService BasketService
+@inject ISessionBuyerService SessionBuyer
+@inject NavigationManager Nav
+
+<PageTitle>@(instrument?.Title ?? "Инструмент") — МузыкаМаркет</PageTitle>
+
+<div class="container py-4">
+@if (instrument == null)
+{
+    <p><em>Загрузка...</em></p>
+}
+else
+{
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="/" class="bc-link">Главная</a></li>
+            <li class="breadcrumb-item"><a href="/catalog" class="bc-link">Каталог</a></li>
+            <li class="breadcrumb-item active">@instrument.Title</li>
+        </ol>
+    </nav>
+
+    <div class="row g-4">
+        <div class="col-lg-5">
+            <div class="detail-cover-wrap">
+                @if (!string.IsNullOrEmpty(instrument.CoverUrl))
+                {
+                    <img src="@instrument.CoverUrl" class="img-fluid rounded" alt="@instrument.Title" style="max-height:380px; object-fit:contain;" />
+                }
+                else
+                {
+                    <div class="detail-cover-placeholder">
+                        <i class="bi bi-music-note"></i>
+                    </div>
+                }
+                <div class="mt-3 text-center">
+                    <span class="badge genre-badge">@instrument.Genre?.Title</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-7">
+            <h2 class="fw-bold mb-1 detail-title">@instrument.Title</h2>
+            <p class="text-muted mb-4">@instrument.Overview</p>
+
+            <ul class="nav detail-tabs border-bottom mb-3">
+                <li class="nav-item">
+                    <a class="nav-link @(activeSection == "overview" ? "active" : "")" href="#" @onclick:preventDefault
+                       @onclick='() => activeSection = "overview"'>Описание</a>
+                </li>
+                @if (instrument.Specs != null)
+                {
+                    <li class="nav-item">
+                        <a class="nav-link @(activeSection == "specs" ? "active" : "")" href="#" @onclick:preventDefault
+                           @onclick='() => activeSection = "specs"'>Характеристики</a>
+                    </li>
+                }
+            </ul>
+
+            @if (activeSection == "overview")
+            {
+                <p class="detail-overview-text">@instrument.Overview</p>
+                <p class="detail-stock-text">В наличии: <strong>@instrument.StockCount шт.</strong></p>
+            }
+            else if (activeSection == "specs" && instrument.Specs != null)
+            {
+                <div>
+                    @if (!string.IsNullOrEmpty(instrument.Specs.Brand))
+                    {
+                        <div class="spec-row">
+                            <span class="spec-label">Бренд</span>
+                            <span class="spec-value">@instrument.Specs.Brand</span>
+                        </div>
+                    }
+                    @if (!string.IsNullOrEmpty(instrument.Specs.Origin))
+                    {
+                        <div class="spec-row">
+                            <span class="spec-label">Страна</span>
+                            <span class="spec-value">@instrument.Specs.Origin</span>
+                        </div>
+                    }
+                    @if (instrument.Specs.MassKg.HasValue)
+                    {
+                        <div class="spec-row">
+                            <span class="spec-label">Масса</span>
+                            <span class="spec-value">@instrument.Specs.MassKg кг</span>
+                        </div>
+                    }
+                    @if (!string.IsNullOrEmpty(instrument.Specs.SizeInfo))
+                    {
+                        <div class="spec-row">
+                            <span class="spec-label">Размер / комплект</span>
+                            <span class="spec-value">@instrument.Specs.SizeInfo</span>
+                        </div>
+                    }
+                    @if (instrument.Specs.GuaranteeMonths > 0)
+                    {
+                        <div class="spec-row">
+                            <span class="spec-label">Гарантия</span>
+                            <span class="spec-value">@instrument.Specs.GuaranteeMonths мес.</span>
+                        </div>
+                    }
+                </div>
+            }
+
+            <div class="detail-price-box mt-4">
+                <div class="price">@instrument.RetailPrice.ToString("N0") ₽</div>
+                <div class="stock-status">
+                    @if (instrument.StockCount > 0)
+                    {
+                        <span><i class="bi bi-check-circle-fill" style="color:#34d399;"></i> В наличии: @instrument.StockCount шт.</span>
+                    }
+                    else
+                    {
+                        <span class="out-of-stock"><i class="bi bi-x-circle-fill"></i> Нет в наличии</span>
+                    }
+                </div>
+                <button class="btn btn-primary btn-lg w-100 mt-3" @onclick="AddToBasket" disabled="@(instrument.StockCount == 0)">
+                    <i class="bi bi-bag-plus me-2"></i> Добавить в корзину
+                </button>
+                <a href="/catalog" class="btn btn-outline-secondary w-100 mt-2 back-btn">
+                    <i class="bi bi-arrow-left me-1"></i> Вернуться в каталог
+                </a>
+            </div>
+        </div>
+    </div>
+}
+</div>
+
+@code {
+    [Parameter] public int ItemId { get; set; }
+    private Models.Instrument? instrument;
+    private string activeSection = "overview";
+
+    protected override async Task OnInitializedAsync()
+    {
+        instrument = await InstrumentService.GetByIdAsync(ItemId);
+        if (instrument?.Specs != null) activeSection = "specs";
+    }
+
+    private async Task AddToBasket()
+    {
+        if (instrument == null) return;
+        var buyer = await SessionBuyer.ResolveSessionBuyerAsync();
+        await BasketService.AddToBasketAsync(buyer.Id, instrument.Id);
+        Nav.NavigateTo("/basket");
+    }
+}

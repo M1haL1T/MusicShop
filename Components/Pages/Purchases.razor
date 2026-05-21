@@ -1,0 +1,118 @@
+@page "/purchases"
+@page "/purchases/{PurchaseId:int?}"
+@rendermode InteractiveServer
+@inject IPurchaseService PurchaseService
+@inject ISessionBuyerService SessionBuyer
+
+<PageTitle>Мои покупки — МузыкаМаркет</PageTitle>
+
+<div class="container py-4">
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="/" class="bc-link">Главная</a></li>
+            <li class="breadcrumb-item active">Мои покупки</li>
+        </ol>
+    </nav>
+
+    <h2 class="fw-bold mb-4 page-title"><i class="bi bi-clock-history me-2 accent-icon"></i>Мои покупки</h2>
+
+    @if (purchaseHistory == null)
+    {
+        <p><em>Загрузка...</em></p>
+    }
+    else if (!purchaseHistory.Any())
+    {
+        <div class="text-center py-5">
+            <i class="bi bi-inbox empty-icon"></i>
+            <h4 class="mt-3 text-muted">Покупок пока нет</h4>
+            <a href="/catalog" class="btn btn-primary mt-2">
+                <i class="bi bi-music-note-list me-1"></i> Перейти в каталог
+            </a>
+        </div>
+    }
+    else
+    {
+        <div class="card p-0 overflow-hidden">
+            <table class="table purchases-table mb-0">
+                <thead>
+                    <tr>
+                        <th>№ заказа</th>
+                        <th>Дата</th>
+                        <th>Состав</th>
+                        <th>Адрес</th>
+                        <th>Сумма</th>
+                        <th>Статус</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var p in purchaseHistory)
+                    {
+                        <tr class="@(PurchaseId == p.Id ? "table-active" : "")">
+                            <td><strong class="accent-text">#@p.Id</strong></td>
+                            <td class="purchases-date">
+                                @p.PlacedAt.ToLocalTime().ToString("dd.MM.yyyy")<br/>
+                                <span class="purchases-time">@p.PlacedAt.ToLocalTime().ToString("HH:mm")</span>
+                            </td>
+                            <td>
+                                <ul class="list-unstyled mb-0 purchases-items">
+                                    @foreach (var entry in p.Entries)
+                                    {
+                                        <li>@entry.Instrument.Title <span class="purchases-qty">× @entry.Qty</span></li>
+                                    }
+                                </ul>
+                            </td>
+                            <td class="purchases-address">@p.ShipTo</td>
+                            <td class="purchases-total">@p.GrandTotal.ToString("N0") ₽</td>
+                            <td>
+                                <span class="status-badge" style="background:@StatusBg(p.Status); color:@StatusColor(p.Status);">
+                                    @StatusLabel(p.Status)
+                                </span>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public int? PurchaseId { get; set; }
+    private List<Models.Purchase>? purchaseHistory;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var buyer = await SessionBuyer.ResolveSessionBuyerAsync();
+        purchaseHistory = (await PurchaseService.ListByBuyerAsync(buyer.Id)).ToList();
+    }
+
+    private string StatusBg(Models.PurchaseStatus s) => s switch
+    {
+        Models.PurchaseStatus.Pending    => "#fef3c7",
+        Models.PurchaseStatus.Processing => "#dbeafe",
+        Models.PurchaseStatus.Shipped    => "#ede9fe",
+        Models.PurchaseStatus.Delivered  => "#d1fae5",
+        Models.PurchaseStatus.Cancelled  => "#fee2e2",
+        _ => "#f3f4f6"
+    };
+
+    private string StatusColor(Models.PurchaseStatus s) => s switch
+    {
+        Models.PurchaseStatus.Pending    => "#92400e",
+        Models.PurchaseStatus.Processing => "#1e40af",
+        Models.PurchaseStatus.Shipped    => "#5b21b6",
+        Models.PurchaseStatus.Delivered  => "#065f46",
+        Models.PurchaseStatus.Cancelled  => "#991b1b",
+        _ => "#374151"
+    };
+
+    private string StatusLabel(Models.PurchaseStatus s) => s switch
+    {
+        Models.PurchaseStatus.Pending    => "Ожидает",
+        Models.PurchaseStatus.Processing => "В обработке",
+        Models.PurchaseStatus.Shipped    => "Отправлен",
+        Models.PurchaseStatus.Delivered  => "Доставлен",
+        Models.PurchaseStatus.Cancelled  => "Отменён",
+        _ => s.ToString()
+    };
+}

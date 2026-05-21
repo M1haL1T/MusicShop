@@ -1,0 +1,29 @@
+@inherits LayoutComponentBase
+
+<div class="page d-flex flex-column min-vh-100">
+    <NavMenu />
+
+    <main class="flex-grow-1">
+        @Body
+    </main>
+
+    <footer class="site-footer py-4 mt-auto">
+        <div class="container">
+            <div class="footer-inner">
+                <div class="footer-brand">
+                    <span class="accent">Музыка</span>Маркет
+                    <div class="footer-tagline">Музыкальные инструменты</div>
+                </div>
+                <div class="footer-links">
+                    <a href="/">Главная</a>
+                    <a href="/catalog">Каталог</a>
+                    <a href="/basket">Корзина</a>
+                    <a href="/purchases">Покупки</a>
+                </div>
+                <div class="footer-copy">
+                    &copy; @DateTime.Now.Year МузыкаМаркет
+                </div>
+            </div>
+        </div>
+    </footer>
+</div>

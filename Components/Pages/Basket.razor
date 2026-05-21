@@ -1,0 +1,147 @@
+@page "/basket"
+@rendermode InteractiveServer
+@inject IBasketService BasketService
+@inject ISessionBuyerService SessionBuyer
+@inject NavigationManager Nav
+
+<PageTitle>Корзина — МузыкаМаркет</PageTitle>
+
+<div class="container py-4">
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="/" class="bc-link">Главная</a></li>
+            <li class="breadcrumb-item active">Корзина</li>
+        </ol>
+    </nav>
+
+    <h2 class="fw-bold mb-4 page-title"><i class="bi bi-bag me-2 accent-icon"></i>Корзина</h2>
+
+    @if (basketEntries == null)
+    {
+        <p><em>Загрузка...</em></p>
+    }
+    else if (!basketEntries.Any())
+    {
+        <div class="text-center py-5">
+            <i class="bi bi-bag-x empty-icon"></i>
+            <h4 class="mt-3 text-muted">Корзина пуста</h4>
+            <p class="text-muted">Добавьте инструменты из каталога</p>
+            <a href="/catalog" class="btn btn-primary mt-2">
+                <i class="bi bi-music-note-list me-1"></i> Перейти в каталог
+            </a>
+        </div>
+    }
+    else
+    {
+        <div class="row g-4 align-items-start">
+            <div class="col-lg-8">
+                <div class="card p-0 overflow-hidden">
+                    <table class="table basket-table mb-0">
+                        <thead>
+                            <tr>
+                                <th>Инструмент</th>
+                                <th>Цена</th>
+                                <th style="width:160px;">Кол-во</th>
+                                <th>Сумма</th>
+                                <th style="width:50px;"></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var entry in basketEntries)
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center gap-3">
+                                            @if (!string.IsNullOrEmpty(entry.Instrument.CoverUrl))
+                                            {
+                                                <img src="@entry.Instrument.CoverUrl" class="basket-thumb" />
+                                            }
+                                            <div>
+                                                <div class="fw-semibold basket-item-name">@entry.Instrument.Title</div>
+                                                <div class="basket-item-genre">@entry.Instrument.Genre?.Title</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td class="basket-price">@entry.Instrument.RetailPrice.ToString("N0") ₽</td>
+                                    <td>
+                                        <div class="input-group input-group-sm">
+                                            <button class="btn btn-outline-secondary" @onclick="() => ChangeAmount(entry.Id, entry.Qty - 1)">−</button>
+                                            <input type="number" class="form-control text-center" value="@entry.Qty"
+                                                   @onchange="@(e => ChangeAmount(entry.Id, int.Parse(e.Value?.ToString() ?? "1")))" />
+                                            <button class="btn btn-outline-secondary" @onclick="() => ChangeAmount(entry.Id, entry.Qty + 1)">+</button>
+                                        </div>
+                                    </td>
+                                    <td><strong>@((entry.Instrument.RetailPrice * entry.Qty).ToString("N0")) ₽</strong></td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveEntry(entry.Id)">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mt-3">
+                    <a href="/catalog" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left me-1"></i> Продолжить покупки
+                    </a>
+                </div>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="summary-box">
+                    <div class="summary-label mb-1">Итого к оплате</div>
+                    <div class="summary-total mb-3">@basketTotal.ToString("N0") ₽</div>
+                    <hr class="summary-divider" />
+                    <div class="summary-details">
+                        <div class="d-flex justify-content-between mb-1">
+                            <span>Позиций в корзине</span>
+                            <span class="summary-value">@basketEntries.Sum(e => e.Qty) шт.</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span>Доставка</span>
+                            <span style="color:@(basketTotal >= 8000 ? "#34d399" : "#9ca3af");">
+                                @(basketTotal >= 8000 ? "Бесплатно" : "Рассчитывается")
+                            </span>
+                        </div>
+                    </div>
+                    <a href="/place-order" class="btn-checkout d-block text-center text-decoration-none mt-3">
+                        Оформить заказ <i class="bi bi-arrow-right ms-1"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<Models.BasketEntry>? basketEntries;
+    private decimal basketTotal;
+    private int sessionBuyerId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var buyer = await SessionBuyer.ResolveSessionBuyerAsync();
+        sessionBuyerId = buyer.Id;
+        await RefreshBasketAsync();
+    }
+
+    private async Task RefreshBasketAsync()
+    {
+        basketEntries = (await BasketService.GetBasketAsync(sessionBuyerId)).ToList();
+        basketTotal = await BasketService.ComputeTotalAsync(sessionBuyerId);
+    }
+
+    private async Task ChangeAmount(int entryId, int qty)
+    {
+        await BasketService.ChangeEntryAmountAsync(entryId, qty);
+        await RefreshBasketAsync();
+    }
+
+    private async Task RemoveEntry(int entryId)
+    {
+        await BasketService.RemoveFromBasketAsync(entryId);
+        await RefreshBasketAsync();
+    }
+}

@@ -1,0 +1,162 @@
+@page "/place-order"
+@rendermode InteractiveServer
+@using FluentValidation
+@using MusicShop.Validators
+@inject IBasketService BasketService
+@inject IPurchaseService PurchaseService
+@inject ISessionBuyerService SessionBuyer
+@inject IValidator<OrderFormData> Validator
+@inject NavigationManager Nav
+
+<PageTitle>Оформление заказа — МузыкаМаркет</PageTitle>
+
+<div class="container py-4">
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="/" class="bc-link">Главная</a></li>
+            <li class="breadcrumb-item"><a href="/basket" class="bc-link">Корзина</a></li>
+            <li class="breadcrumb-item active">Оформление заказа</li>
+        </ol>
+    </nav>
+
+    <div class="order-steps d-flex align-items-center gap-0 mb-5">
+        <div class="step-item">
+            <div class="step-circle step-done">1</div>
+            <span class="step-label text-muted">Корзина</span>
+        </div>
+        <div class="step-line"></div>
+        <div class="step-item">
+            <div class="step-circle step-active">2</div>
+            <span class="step-label step-label-active">Доставка</span>
+        </div>
+        <div class="step-line"></div>
+        <div class="step-item">
+            <div class="step-circle step-todo">3</div>
+            <span class="step-label text-muted">Готово</span>
+        </div>
+    </div>
+
+    @if (basketTotal == 0)
+    {
+        <div class="alert alert-warning">Корзина пуста. <a href="/catalog" class="bc-link">Перейти в каталог</a>.</div>
+    }
+    else
+    {
+        <div class="row g-4 align-items-start">
+            <div class="col-lg-7">
+                <div class="card">
+                    <div class="card-header">
+                        <i class="bi bi-geo-alt-fill me-2 accent-icon"></i>Данные для доставки
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">ФИО <span class="accent-text">*</span></label>
+                            <input class="form-control" placeholder="Иванов Иван Иванович" @bind="formData.FullName" />
+                            @if (formErrors.ContainsKey(nameof(formData.FullName)))
+                            { <div class="text-danger small mt-1">@formErrors[nameof(formData.FullName)]</div> }
+                        </div>
+
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Email <span class="accent-text">*</span></label>
+                                <input class="form-control" placeholder="example@mail.ru" @bind="formData.Email" />
+                                @if (formErrors.ContainsKey(nameof(formData.Email)))
+                                { <div class="text-danger small mt-1">@formErrors[nameof(formData.Email)]</div> }
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-semibold">Телефон</label>
+                                <input class="form-control" placeholder="+7 (999) 000-00-00" @bind="formData.Phone" />
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Адрес доставки <span class="accent-text">*</span></label>
+                            <textarea class="form-control" rows="3" placeholder="Город, улица, дом, квартира" @bind="formData.ShipTo"></textarea>
+                            @if (formErrors.ContainsKey(nameof(formData.ShipTo)))
+                            { <div class="text-danger small mt-1">@formErrors[nameof(formData.ShipTo)]</div> }
+                        </div>
+
+                        @if (!string.IsNullOrEmpty(submitError))
+                        {
+                            <div class="alert alert-danger">@submitError</div>
+                        }
+
+                        <button class="btn btn-success btn-lg w-100 mt-2" @onclick="ConfirmPurchase" disabled="@isProcessing">
+                            @if (isProcessing)
+                            {
+                                <span class="spinner-border spinner-border-sm me-2"></span>
+                            }
+                            @(isProcessing ? "Обработка..." : "Подтвердить заказ")
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-5">
+                <div class="summary-box">
+                    <div class="summary-box-header">Ваш заказ</div>
+                    <div class="d-flex justify-content-between mb-2 summary-row">
+                        <span>Позиций</span>
+                        <span>@itemCount шт.</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2 summary-row">
+                        <span>Доставка</span>
+                        <span style="color:@(basketTotal >= 8000 ? "#34d399" : "#9ca3af");">
+                            @(basketTotal >= 8000 ? "Бесплатно" : "По тарифу")
+                        </span>
+                    </div>
+                    <hr class="summary-divider" />
+                    <div class="summary-label">Итого</div>
+                    <div class="summary-total">@basketTotal.ToString("N0") ₽</div>
+                    <div class="summary-secure">
+                        <i class="bi bi-shield-lock-fill accent-icon"></i> Безопасная оплата. Гарантия возврата.
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private OrderFormData formData = new();
+    private Dictionary<string, string> formErrors = new();
+    private string? submitError;
+    private decimal basketTotal;
+    private int itemCount;
+    private int sessionBuyerId;
+    private bool isProcessing;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var buyer = await SessionBuyer.ResolveSessionBuyerAsync();
+        sessionBuyerId = buyer.Id;
+        var entries = (await BasketService.GetBasketAsync(sessionBuyerId)).ToList();
+        itemCount = entries.Sum(e => e.Qty);
+        basketTotal = await BasketService.ComputeTotalAsync(sessionBuyerId);
+    }
+
+    private async Task ConfirmPurchase()
+    {
+        formErrors.Clear();
+        submitError = null;
+        var result = await Validator.ValidateAsync(formData);
+        if (!result.IsValid)
+        {
+            foreach (var f in result.Errors)
+                formErrors[f.PropertyName] = f.ErrorMessage;
+            return;
+        }
+
+        isProcessing = true;
+        try
+        {
+            var purchase = await PurchaseService.PlaceFromBasketAsync(sessionBuyerId, formData.ShipTo);
+            Nav.NavigateTo($"/purchases/{purchase.Id}");
+        }
+        catch (Exception ex)
+        {
+            submitError = ex.Message;
+            isProcessing = false;
+        }
+    }
+}

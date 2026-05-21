@@ -1,0 +1,125 @@
+@page "/catalog"
+@rendermode InteractiveServer
+@inject IInstrumentService InstrumentService
+@inject IGenreService GenreService
+@inject IBasketService BasketService
+@inject ISessionBuyerService SessionBuyer
+@inject NavigationManager Nav
+
+<PageTitle>Каталог инструментов — МузыкаМаркет</PageTitle>
+
+<div class="container py-4">
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="/" class="bc-link">Главная</a></li>
+            <li class="breadcrumb-item active">Каталог инструментов</li>
+        </ol>
+    </nav>
+
+    <div class="catalog-topbar mb-3">
+        <h2 class="catalog-heading"><i class="bi bi-music-note-list me-2 accent-icon"></i>Каталог инструментов</h2>
+    </div>
+
+    <div class="genre-pills-row mb-4">
+        <button class="genre-pill @(chosenGenreId == 0 ? "active" : "")" @onclick="() => FilterByGenre(0)">
+            <i class="bi bi-music-note-beamed"></i> Все
+        </button>
+        @if (genres != null)
+        {
+            foreach (var g in genres)
+            {
+                var gId = g.Id;
+                <button class="genre-pill @(chosenGenreId == gId ? "active" : "")" @onclick="() => FilterByGenre(gId)">
+                    @g.Title
+                </button>
+            }
+        }
+    </div>
+
+    @if (instruments == null)
+    {
+        <p><em>Загрузка...</em></p>
+    }
+    else if (!instruments.Any())
+    {
+        <div class="alert alert-info">Инструменты не найдены.</div>
+    }
+    else
+    {
+        <div class="results-bar">
+            <span>Найдено: <strong>@instruments.Count() инструментов</strong></span>
+            <span class="results-bar-hint"><i class="bi bi-check-circle-fill accent-icon"></i> Всё в наличии</span>
+        </div>
+
+        <div class="row g-3">
+            @foreach (var item in instruments)
+            {
+                <div class="col-xl-3 col-lg-4 col-md-6">
+                    <div class="item-card">
+                        @if (!string.IsNullOrEmpty(item.CoverUrl))
+                        {
+                            <img src="@item.CoverUrl" class="item-card-img" alt="@item.Title" />
+                        }
+                        else
+                        {
+                            <div class="item-card-img-placeholder">
+                                <i class="bi bi-music-note"></i>
+                            </div>
+                        }
+                        <div class="item-card-body">
+                            <div class="item-card-genre">@item.Genre?.Title</div>
+                            <div class="item-card-name">@item.Title</div>
+                            <div class="item-card-desc">@item.Overview</div>
+                        </div>
+                        <div class="item-card-footer">
+                            <div>
+                                <div class="item-card-price">@item.RetailPrice.ToString("N0") ₽</div>
+                                <div class="item-card-stock">В наличии: @item.StockCount шт.</div>
+                            </div>
+                            <div class="d-flex flex-column gap-1">
+                                <a class="btn-view" href="@($"/catalog/{item.Id}")">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                <button class="btn-basket" @onclick="() => AddToBasket(item.Id)" disabled="@(item.StockCount == 0)">
+                                    <i class="bi bi-bag-plus"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private IEnumerable<Models.Instrument>? instruments;
+    private IEnumerable<Models.Genre>? genres;
+    private int chosenGenreId = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        genres = await GenreService.ListAllAsync();
+        await FetchInstruments();
+    }
+
+    private async Task FilterByGenre(int genreId)
+    {
+        chosenGenreId = genreId;
+        await FetchInstruments();
+    }
+
+    private async Task FetchInstruments()
+    {
+        instruments = chosenGenreId == 0
+            ? await InstrumentService.ListAllAsync()
+            : await InstrumentService.ListByGenreAsync(chosenGenreId);
+    }
+
+    private async Task AddToBasket(int instrumentId)
+    {
+        var buyer = await SessionBuyer.ResolveSessionBuyerAsync();
+        await BasketService.AddToBasketAsync(buyer.Id, instrumentId);
+        Nav.NavigateTo("/basket");
+    }
+}
